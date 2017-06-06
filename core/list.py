@@ -1,10 +1,11 @@
+from builtins import object
+
 import core.util as util
 from core.primitives import nil
 
 
 # TODO: implement python's list methods
 #       what about map and reduce?
-
 class EmptyListWithoutMetaInfo(metaclass=util.SingletonMeta):
 
     _str_repr = "()"
@@ -43,6 +44,9 @@ class EmptyListWithoutMetaInfo(metaclass=util.SingletonMeta):
 
     def __eq__(self, other):
         return isinstance(other, (EmptyList, EmptyListWithoutMetaInfo))
+
+    def __len__(self):
+        return 0
 
 
 class EmptyListMeta(type):
@@ -93,6 +97,9 @@ class EmptyList(metaclass=EmptyListMeta):
     def __eq__(self, other):
         return isinstance(other, (EmptyList, EmptyListWithoutMetaInfo))
 
+    def __len__(self):
+        return 0
+
 
 class List:
 
@@ -109,30 +116,30 @@ class List:
         return self._next
 
     def size(self):
-        return self._size
+        return len(self)
 
     def meta(self):
         return self._meta
 
     def conj(self, item, *items, meta=nil):
-        new_list = List(item, self, self.size() + 1, meta)
+        new_list = List(item, self, len(self) + 1, meta)
         if items:
             for el in items:
-                new_list = List(el, new_list, new_list.size() + 1, meta=meta)
+                new_list = List(el, new_list, len(new_list) + 1, meta=meta)
         return new_list
 
     def __iter__(self):
         current = self
-        for i in range(self.size()):
+        for i in range(len(self)):
             yield current.first()
             current = current.next()
 
     def __eq__(self, other):
         if (not isinstance(other, List) or
-            self.size() != other.size()):
+            len(self) != len(other)):
             return False
         cur1, cur2 = self, other
-        for i in range(self.size()):
+        for i in range(len(self)):
             if cur1.first() != cur2.first():
                 return False
             cur1, cur2 = self.next(), other.next()
@@ -143,3 +150,6 @@ class List:
 
     def __repr__(self):
         return self.__str__()
+
+    def __len__(self):
+        return self._size
