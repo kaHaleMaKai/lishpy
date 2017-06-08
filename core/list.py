@@ -56,6 +56,10 @@ class EmptyList(List):
     def __len__(self):
         return 0
 
+    @staticmethod
+    def __bool__():
+        return False
+
 
 # TODO: implement python's list methods
 #       what about map and reduce?
@@ -81,6 +85,9 @@ class EmptyListWithMetaInfo(EmptyList):
 
 
 class ListImpl(List):
+
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
 
     def __init__(self, head, tail, size, meta=None):
         self._first = head
@@ -136,3 +143,7 @@ class ListImpl(List):
 
     def __len__(self):
         return self._size
+
+    @staticmethod
+    def __bool__():
+        return True
