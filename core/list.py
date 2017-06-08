@@ -1,37 +1,45 @@
-from builtins import object
-
 import core.util as util
 from core.primitives import nil
 
 
-# TODO: implement python's list methods
-#       what about map and reduce?
-class EmptyListWithoutMetaInfo(metaclass=util.SingletonMeta):
+class List:
+    def __new__(cls, head=nil, tail=nil, meta=nil, *args, **kwargs):
+        if head is not nil or tail is not nil:
+            return ListImpl(head, tail, meta)
+        elif meta is nil:
+            return EmptyListWithoutMetaInfo()
+        else:
+            return EmptyListWithoutMetaInfo(meta=meta)
+
+
+class EmptyList(List):
+
+    def __new__(cls, meta=nil, *args, **kwargs):
+        if meta is nil:
+            return EmptyListWithoutMetaInfo()
+        else:
+            return EmptyListWithoutMetaInfo(meta=meta)
 
     _str_repr = "()"
 
-    def __init__(self):
+    def __init__(self, meta=nil):
         pass
 
-    @staticmethod
-    def first():
+    @property
+    def first(self):
         return nil
 
-    @staticmethod
-    def next():
+    @property
+    def next(self):
         return nil
 
-    @staticmethod
-    def size():
+    @property
+    def size(self):
         return 0
 
     @staticmethod
-    def meta():
-        return nil
-
-    @staticmethod
     def conj(item, *items, meta=nil):
-        new_list = List(item, nil, 1, meta)
+        new_list = ListImpl(item, nil, 1, nil if items else meta)
         if items:
             return new_list.conj(*items, meta=meta)
         return new_list
@@ -43,65 +51,36 @@ class EmptyListWithoutMetaInfo(metaclass=util.SingletonMeta):
         return self.__str__()
 
     def __eq__(self, other):
-        return isinstance(other, (EmptyList, EmptyListWithoutMetaInfo))
+        return isinstance(other, EmptyList)
 
     def __len__(self):
         return 0
 
 
-class EmptyListMeta(type):
-    def __call__(cls, meta=nil):
-        if meta is nil:
-            return EmptyListWithoutMetaInfo()
-        else:
-            instance = object.__new__(cls)
-            instance.__init__(meta)
-            return instance
+# TODO: implement python's list methods
+#       what about map and reduce?
+class EmptyListWithoutMetaInfo(EmptyList, metaclass=util.SingletonMeta):
 
-
-class EmptyList(metaclass=EmptyListMeta):
-
-    _str_repr = "()"
-
+    # EmptyList constructor expects the meta keyword
     def __init__(self, meta=nil):
+        super().__init__()
+
+    @property
+    def meta(self):
+        return nil
+
+
+class EmptyListWithMetaInfo(EmptyList):
+
+    def __init__(self, meta):
+        super().__init__()
         self._meta = meta
-
-    @staticmethod
-    def first():
-        return nil
-
-    @staticmethod
-    def next():
-        return nil
-
-    @staticmethod
-    def size():
-        return 0
 
     def meta(self):
         return self._meta
 
-    @staticmethod
-    def conj(item, *items, meta=nil):
-        new_list = List(item, nil, 1, meta)
-        if items:
-            new_list.conj(*items, meta=meta)
-        return new_list
 
-    def __str__(self):
-        return self._str_repr
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __eq__(self, other):
-        return isinstance(other, (EmptyList, EmptyListWithoutMetaInfo))
-
-    def __len__(self):
-        return 0
-
-
-class List:
+class ListImpl(List):
 
     def __init__(self, head, tail, size, meta=None):
         self._first = head
@@ -109,40 +88,44 @@ class List:
         self._size = size
         self._meta = meta
 
+    @property
     def first(self):
         return self._first
 
+    @property
     def next(self):
         return self._next
 
+    @property
     def size(self):
         return len(self)
 
+    @property
     def meta(self):
         return self._meta
 
     def conj(self, item, *items, meta=nil):
-        new_list = List(item, self, len(self) + 1, meta)
+        new_list = ListImpl(item, self, len(self) + 1, meta)
         if items:
             for el in items:
-                new_list = List(el, new_list, len(new_list) + 1, meta=meta)
+                new_list = ListImpl(el, new_list, len(new_list) + 1, meta=meta)
         return new_list
 
     def __iter__(self):
         current = self
         for i in range(len(self)):
-            yield current.first()
-            current = current.next()
+            yield current.first
+            current = current.next
 
     def __eq__(self, other):
-        if (not isinstance(other, List) or
+        if (not isinstance(other, ListImpl) or
             len(self) != len(other)):
             return False
         cur1, cur2 = self, other
         for i in range(len(self)):
-            if cur1.first() != cur2.first():
+            if cur1.first != cur2.first:
                 return False
-            cur1, cur2 = self.next(), other.next()
+            cur1, cur2 = self.next, other.next
         return True
 
     def __str__(self):
