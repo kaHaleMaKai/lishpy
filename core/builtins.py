@@ -82,7 +82,7 @@ class Namespace(metaclass=NamespaceMeta):
         self._module = sys.modules[name]
         if not hasattr(self._module, "__ns__"):
             self._module.__ns__ = self
-        self._ns_dict = self._module.__dict__
+        self._symbols = {}
 
     @property
     def name(self):
@@ -92,8 +92,23 @@ class Namespace(metaclass=NamespaceMeta):
     def doc(self):
         return self._doc
 
-    def get(self, name):
-        return self._ns_dict[name]
+    def __getitem__(self, item):
+        try:
+            return self._symbols[item]
+        except KeyError:
+            # resolve it
+            pass
+
+    def __setitem__(self, key, value):
+        self._symbols[key] = value
+
+    def get(self, item, default=None):
+        try:
+            return self[item]
+        except KeyError as e:
+            if default is not None:
+                return default
+            raise e
 
     # TODO: deep reloading
     def initialize(self, imports_specs=None, require_specs=None, reload=False):
