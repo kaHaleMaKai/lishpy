@@ -6,6 +6,7 @@ from importlib._bootstrap import ModuleSpec
 from types import FunctionType
 from typing import Generator
 
+from core.primitives import nil
 from core.errors import NamingError, DeclarationError
 
 NS_PATTERN = re.compile("[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z][a-zA-Z0-9_\-]*)*")
@@ -68,9 +69,10 @@ class Namespace(metaclass=NamespaceMeta):
     _registry = NamespaceMeta.registry
     _current_ns = None
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, doc: str=nil):
         self._initialized = False
-        self.name = name
+        self._name = name
+        self._doc = doc
 
         if name in self._registry:
             raise DeclarationError("namespace '%s' is already defined" % name)
@@ -81,6 +83,14 @@ class Namespace(metaclass=NamespaceMeta):
         if not hasattr(self._module, "__ns__"):
             self._module.__ns__ = self
         self._ns_dict = self._module.__dict__
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def doc(self):
+        return self._doc
 
     def get(self, name):
         return self._ns_dict[name]
