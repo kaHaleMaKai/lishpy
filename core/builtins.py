@@ -58,7 +58,7 @@ class NamespaceMeta(type):
             return cls.registry[name]
         except KeyError:
             pass
-        new = object.__new__(cls)
+        new = cls.__new__(cls)
         new.__init__(name, *args, **kwargs)
         return new
 
@@ -66,6 +66,7 @@ class NamespaceMeta(type):
 class Namespace(metaclass=NamespaceMeta):
 
     _registry = NamespaceMeta.registry
+    _current_ns = None
 
     def __init__(self, name: str):
         self._initialized = False
@@ -94,6 +95,7 @@ class Namespace(metaclass=NamespaceMeta):
             if require_specs:
                 self.require(require_specs)
         self._initialized = True
+        Namespace._current_ns = self
         return True
 
     def pyimport(self, import_specs):
@@ -147,6 +149,10 @@ class Namespace(metaclass=NamespaceMeta):
             return cls._registry[name]
         except KeyError:
             raise KeyError("unknown namespace: '%s'" % name)
+
+    @classmethod
+    def current_ns(cls):
+        return cls._current_ns
 
 
 class Symbol:
