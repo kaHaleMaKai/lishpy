@@ -4,3 +4,7 @@ class NamingError(Exception):
 
 class DeclarationError(Exception):
     pass
+
+
+class ConstantError(Exception):
+    pass

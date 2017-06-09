@@ -1,6 +1,6 @@
-import types
-from core import util
+from core.util import SingletonMeta
 from fractions import Fraction
+from core.errors import ConstantError
 
 
 class Atom:
@@ -8,7 +8,7 @@ class Atom:
         return self
 
 
-class Nil(Atom, metaclass=util.SingletonMeta):
+class Nil(Atom, metaclass=SingletonMeta):
 
     _str_repr = "nil"
 
@@ -25,7 +25,59 @@ class Sexp:
     pass
 
 
-class BooleanTrue(Atom, metaclass=util.SingletonMeta):
+class BooleanMeta(type):
+
+    def __new__(cls, classname, bases, attrs):
+        if classname not in ("Boolean", "BooleanTrue", "BooleanFalse"):
+            raise TypeError("class Boolean is not an acceptable base type" % classname)
+        return super().__new__(cls, classname, bases, attrs)
+
+    @property
+    def true(cls):
+        try:
+            return cls._true
+        except AttributeError:
+            cls._true = BooleanTrue()
+            return cls._true
+
+    @true.setter
+    def true(cls, *args):
+        raise ConstantError("cannot change value of constant")
+
+    @property
+    def false(cls):
+        try:
+            return cls._false
+        except AttributeError:
+            cls._false = BooleanFalse()
+            return cls._false
+
+    @false.setter
+    def false(cls, *args):
+        raise ConstantError("cannot change value of constant")
+
+
+class Boolean(Atom, metaclass=BooleanMeta):
+    def __new__(cls, value, *args, **kwargs):
+        if value:
+            return cls.true
+        else:
+            return cls.false
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+class BooleanSingletonMeta(BooleanMeta, SingletonMeta):
+
+    def __getattribute__(cls, item):
+        if item in ("true", "false"):
+            raise AttributeError("class %s has not attribute %s" %
+                                 (cls.__qualname__, item))
+        return object.__getattribute__(cls, item)
+
+
+class BooleanTrue(Boolean, metaclass=BooleanSingletonMeta):
     str_repr = "true"
 
     def __str__(self):
@@ -38,7 +90,7 @@ class BooleanTrue(Atom, metaclass=util.SingletonMeta):
         return True
 
 
-class BooleanFalse(Atom, metaclass=util.SingletonMeta):
+class BooleanFalse(Boolean, metaclass=BooleanSingletonMeta):
     str_repr = "false"
 
     def __str__(self):
@@ -95,6 +147,7 @@ class StringMeta(type):
 
 class String(str, metaclass=StringMeta):
     pass
+
 
 class Number:
     pass
