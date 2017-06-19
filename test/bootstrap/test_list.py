@@ -1,9 +1,9 @@
 import unittest
-from core.list import (List,
-                       EmptyList,
-                       EmptyListWithoutMetaInfo,
-                       EmptyListWithMetaInfo)
-from core.primitives import nil
+from bootstrap.list import (List,
+                            EmptyList,
+                            EmptyListWithoutMetaInfo,
+                            EmptyListWithMetaInfo)
+from bootstrap.primitives import nil
 
 
 class ListTest(unittest.TestCase):

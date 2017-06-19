@@ -1,6 +1,6 @@
 import unittest
-from core.primitives import *
-from core.errors import ConstantError
+from bootstrap.primitives import *
+from bootstrap.errors import ConstantError
 
 
 class BooleanTest(unittest.TestCase):
@@ -29,9 +29,23 @@ class BooleanTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             class OtherBoolean(Boolean):
                 pass
-        with self.assertRaises(TypeError):
-            class OtherBoolean(BooleanTrue):
-                pass
-        with self.assertRaises(TypeError):
-            class OtherBoolean(BooleanFalse):
-                pass
+
+
+class StringTest(unittest.TestCase):
+
+    def test_is(self):
+        get_msg = lambda: "".join(s for s in "hello")
+        s0 = String(get_msg())
+        s1 = String(get_msg())
+        self.assertEqual(s0, s1)
+        self.assertFalse(s0 is s1)
+        S0 = String(get_msg())
+        S1 = String(get_msg())
+        self.assertEqual(S0, S1)
+        self.assertEqual(S0, s0)
+        self.assertFalse(S0 is S1)
+        S2 = String(get_msg(), intern=True)
+        S3 = String(get_msg())
+        self.assertIs(S2, S3)
+        S4 = String(get_msg())
+        self.assertIs(S2, S4)

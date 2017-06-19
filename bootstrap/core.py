@@ -3,11 +3,12 @@ import sys
 import re
 import imp
 from importlib._bootstrap import ModuleSpec
-from types import FunctionType
-from typing import Generator
+from typing import Generator, Callable, Union
 
-from core.primitives import nil
-from core.errors import NamingError, DeclarationError
+from bootstrap.primitives import nil, String, Symbol
+from bootstrap.errors import NamingError, DeclarationError
+from bootstrap.util import ns_to_identifier
+
 
 NS_PATTERN = re.compile("[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z][a-zA-Z0-9_\-]*)*")
 DOT_PATTERN = re.compile("\.")
@@ -59,9 +60,13 @@ class NamespaceMeta(type):
             return cls.registry[name]
         except KeyError:
             pass
-        new = cls.__new__(cls)
+        new = cls.__new__(cls, *args, **kwargs)
         new.__init__(name, *args, **kwargs)
         return new
+
+    @property
+    def current_ns(cls) -> 'Namespace':
+        return cls._current_ns
 
 
 class Namespace(metaclass=NamespaceMeta):
@@ -71,7 +76,8 @@ class Namespace(metaclass=NamespaceMeta):
 
     def __init__(self, name: str, doc: str=nil):
         self._initialized = False
-        self._name = name
+        self._name = String(name, intern=True)
+        self._pyname = ns_to_identifier(self._name)
         self._doc = doc
 
         if name in self._registry:
@@ -92,15 +98,55 @@ class Namespace(metaclass=NamespaceMeta):
     def doc(self):
         return self._doc
 
-    def __getitem__(self, item):
+    def __getitem__(self, symbol: Union['Symbol', str]):
         try:
-            return self._symbols[item]
-        except KeyError:
-            # resolve it
-            pass
+            if not symbol.ns:
+                return self._symbols[symbol.name]
+            else:
+                return self._symbols[symbol.ns][symbol.name]
+        except AttributeError as e:
+            if isinstance(symbol, str):
+                if "/" in str:
+                    ns, name = symbol.split("/")
+                    # noinspection PyProtectedMember
+                    return self._symbols[ns]._symbols[name]
+                else:
+                    return self._symbols[symbol]
 
-    def __setitem__(self, key, value):
-        self._symbols[key] = value
+    def __contains__(self, symbol: Union['Symbol', str]):
+        try:
+            if not symbol.ns:
+                return symbol.name in self._symbols
+            try:
+                return symbol.name in self._symbols[symbol.ns]
+            except KeyError:
+                return False
+        except AttributeError:
+            if "/" in symbol:
+                ns, name = symbol.split("/")
+                try:
+                    # noinspection PyProtectedMember
+                    return name in self._symbols[ns]._symbols
+                except KeyError:
+                    return False
+            else:
+                return symbol in self._symbols
+
+    def __setitem__(self, symbol: Union['Symbol', str], value):
+        try:
+            if symbol.ns:
+                raise DeclarationError("cannot define ns-qualified var: '%s'" % symbol)
+            if symbol in self:
+                raise DeclarationError("symbol '%s' has already been declared in ns '%s'",
+                                       symbol, self.name)
+            self._symbols[symbol.name] = value
+        except AttributeError:
+            if "/" in symbol:
+                raise DeclarationError("cannot define ns-qualified var: '%s'" % symbol)
+            if symbol in self._symbols:
+                raise DeclarationError("symbol '%s' has already been declared in ns '%s'",
+                                       symbol, self.name)
+            self._symbols[symbol] = value
 
     def get(self, item, default=None):
         try:
@@ -129,10 +175,12 @@ class Namespace(metaclass=NamespaceMeta):
             mod = importlib.import_module(mod_spec.module_name)
             if isinstance(mod_spec, DirectImportSpec):
                 setattr(ns_mod, mod_spec.alias, mod)
+                self[mod_spec.alias] = mod
             elif isinstance(mod_spec, IndirectImportSpec):
                 for member_spec in mod_spec.members:
                     member = getattr(mod, member_spec.name)
                     setattr(ns_mod, member_spec.alias, member)
+                    self[member_spec.alias] = member
 
     def require(self, require_specs):
         raise NotImplementedError("require: todo")
@@ -176,18 +224,43 @@ class Namespace(metaclass=NamespaceMeta):
             raise KeyError("unknown namespace: '%s'" % name)
 
     @classmethod
-    def current_ns(cls):
-        return cls._current_ns
+    def lookup_symbol_in_current_ns(cls, symbol: 'Symbol'):
+        return cls._current_ns[symbol]
+
+    @staticmethod
+    def pyname(name: str):
+        pass
 
 
-class Symbol:
-    def __init__(self, name):
-        self.name = name
+class SpecialForm:
+    _forms = {}
+
+    @classmethod
+    def get_form(cls, symbol: Symbol):
+        return cls._forms[symbol]
 
 
 class Evaluable:
     def evaluate(self):
-        return self.value
+        return self
+
+
+def evaluate_symbol(symbol: Symbol, locals_: Callable = None):
+    if symbol.ns is nil:
+        try:
+            SpecialForm.get_form(symbol.name)
+        except KeyError:
+            pass
+        if locals:
+            try:
+                return locals_()[symbol.name]
+            except KeyError:
+                return Namespace.current_ns[symbol.name]
+    else:
+        other_ns = Namespace.current_ns[symbol.ns]
+        if not isinstance(other_ns, Namespace):
+            raise TypeError("referred namespace '%s' is no Namespace object" % other_ns)
+        return other_ns[symbol.name]
 
 
 class Var(Evaluable):
@@ -204,19 +277,37 @@ class Var(Evaluable):
 
 # TODO: caching
 class Keyword(Evaluable):
+    __slots__ = ["_value", "_ns"]
+
     def __init__(self, name, ns=None):
-        self.value = name
-        self.ns = ns
+        self._value = name
+        self._ns = ns
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def ns(self):
+        return self._ns
 
 
-class Function(Evaluable, FunctionType):
-    def __init__(self):
-        raise NotImplementedError()
+class Arity:
+    __slots__ = ["_num", "_var_pos"]
 
-    def evalute(self):
-        return self
+    def __init__(self, num_args, var_pos=False):
+        self._num = num_args
+        self._var_pos = bool(var_pos)
 
+    @property
+    def num(self):
+        return self._num
 
-class Macro(Evaluable, FunctionType):
-    def __init__(self):
-        raise NotImplementedError()
+    @property
+    def var_pos(self):
+        return self._var_pos
+
+    # (my-fn 1 2 3 (:kw hello "world",
+# class Macro(Evaluable, FunctionType):
+#     def __init__(self):
+#         raise NotImplementedError()

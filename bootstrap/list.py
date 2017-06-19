@@ -1,5 +1,5 @@
-import core.util as util
-from core.primitives import nil
+import bootstrap.util as util
+from bootstrap.primitives import nil
 
 
 class List:

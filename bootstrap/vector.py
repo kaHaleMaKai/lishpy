@@ -1,4 +1,4 @@
-from core.primitives import nil
+from bootstrap.primitives import nil
 
 
 class Vector:

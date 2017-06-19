@@ -1,6 +1,6 @@
 import unittest
-from core.vector import *
-from core.primitives import nil
+from bootstrap.vector import *
+from bootstrap.primitives import nil
 
 
 class VectorTest(unittest.TestCase):
