@@ -3,11 +3,12 @@ import sys
 import re
 import imp
 from importlib._bootstrap import ModuleSpec
+from types import ModuleType
 from typing import Generator, Callable, Union
 
 from bootstrap.primitives import nil, String, Symbol
 from bootstrap.errors import NamingError, DeclarationError
-from bootstrap.util import ns_to_identifier
+from bootstrap.util import symbol_to_identifier, ns_to_identifier
 
 
 NS_PATTERN = re.compile("[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z][a-zA-Z0-9_\-]*)*")
@@ -62,6 +63,7 @@ class NamespaceMeta(type):
             pass
         new = cls.__new__(cls, *args, **kwargs)
         new.__init__(name, *args, **kwargs)
+        cls.registry[name] = new
         return new
 
     @property
@@ -69,7 +71,7 @@ class NamespaceMeta(type):
         return cls._current_ns
 
 
-class Namespace(metaclass=NamespaceMeta):
+class Namespace(ModuleType, metaclass=NamespaceMeta):
 
     _registry = NamespaceMeta.registry
     _current_ns = None
@@ -77,18 +79,16 @@ class Namespace(metaclass=NamespaceMeta):
     def __init__(self, name: str, doc: str=nil):
         self._initialized = False
         self._name = String(name, intern=True)
-        self._pyname = ns_to_identifier(self._name)
-        self._doc = doc
+        super().__init__(name, doc)
+        pyname = ns_to_identifier(self._name)
+        self.__doc__ = doc
 
         if name in self._registry:
             raise DeclarationError("namespace '%s' is already defined" % name)
 
-        if name not in sys.modules:
-            sys.modules[name] = self.new_module(name)
-        self._module = sys.modules[name]
-        if not hasattr(self._module, "__ns__"):
-            self._module.__ns__ = self
-        self._symbols = {}
+        self.load_parent_if_absent()
+        if pyname not in sys.modules:
+            sys.modules[pyname] = self
 
     @property
     def name(self):
@@ -98,57 +98,96 @@ class Namespace(metaclass=NamespaceMeta):
     def doc(self):
         return self._doc
 
-    def __getitem__(self, symbol: Union['Symbol', str]):
+    def __getitem__(self, symbol: Union['Symbol', 'Namespace', str]):
         try:
             if not symbol.ns:
-                return self._symbols[symbol.name]
+                return self.__dict__[symbol_to_identifier(symbol.name)]
             else:
-                return self._symbols[symbol.ns][symbol.name]
-        except AttributeError as e:
-            if isinstance(symbol, str):
-                if "/" in str:
-                    ns, name = symbol.split("/")
-                    # noinspection PyProtectedMember
-                    return self._symbols[ns]._symbols[name]
-                else:
-                    return self._symbols[symbol]
+                return self.__dict__[ns_to_identifier(symbol.ns)][symbol_to_identifier(symbol.name)]
+        except AttributeError:
+            pass
+        # if symbol lacks the ns attribute, it's not a Symbol
+        # next, assume it's a Namespace
+        try:
+            name = ns_to_identifier(symbol.name)
+            return self.__dict__[name]
+        except AttributeError:
+            pass
+        # now only a str or descendant is applicable
+        try:
+            if "/" in symbol:
+                ns, name = symbol.split("/")
+                # noinspection PyProtectedMember
+                return self.__dict__[ns_to_identifier(ns)].__dict__[symbol_to_identifier(name)]
+            else:
+                return self.__dict__[symbol_to_identifier(symbol)]
+        except (TypeError, AttributeError) as e:
+            raise TypeError("a namespace may only contain symbols (or string keys)") from e
 
-    def __contains__(self, symbol: Union['Symbol', str]):
+    def __contains__(self, symbol: Union['Symbol', 'Namespace', str]):
         try:
             if not symbol.ns:
-                return symbol.name in self._symbols
+                return symbol_to_identifier(symbol.name) in self.__dict__
             try:
-                return symbol.name in self._symbols[symbol.ns]
+                return symbol_to_identifier(symbol.name) in self.__dict__[ns_to_identifier(symbol.ns)]
             except KeyError:
                 return False
         except AttributeError:
+            pass
+        try:
+            name = ns_to_identifier(symbol.name)
+            return name in self.__dict__
+        except AttributeError:
+            pass
+        try:
             if "/" in symbol:
                 ns, name = symbol.split("/")
                 try:
                     # noinspection PyProtectedMember
-                    return name in self._symbols[ns]._symbols
+                    return symbol_to_identifier(name) in self.__dict__[ns_to_identifier(ns)]
                 except KeyError:
                     return False
             else:
-                return symbol in self._symbols
+                return symbol_to_identifier(symbol) in self.__dict__
+        except (TypeError, AttributeError) as e:
+            raise TypeError("a namespace may only contain symbols (or string keys)") from e
 
-    def __setitem__(self, symbol: Union['Symbol', str], value):
+    def __setitem__(self, symbol: Union['Symbol', 'Namespace', str], value):
         try:
             if symbol.ns:
                 raise DeclarationError("cannot define ns-qualified var: '%s'" % symbol)
-            if symbol in self:
+            pyname = symbol_to_identifier(symbol.name)
+            if pyname in self.__dict__:
                 raise DeclarationError("symbol '%s' has already been declared in ns '%s'",
                                        symbol, self.name)
-            self._symbols[symbol.name] = value
+            self.__dict__[pyname] = value
+            return
         except AttributeError:
+            pass
+        try:
+            name = ns_to_identifier(symbol.name)
+            self.__dict__[name] = value
+            return
+        except AttributeError:
+            pass
+        try:
             if "/" in symbol:
                 raise DeclarationError("cannot define ns-qualified var: '%s'" % symbol)
-            if symbol in self._symbols:
-                raise DeclarationError("symbol '%s' has already been declared in ns '%s'",
-                                       symbol, self.name)
-            self._symbols[symbol] = value
+            if isinstance(value, ModuleType):
+                self.__dict__[ns_to_identifier(symbol)] = value
+            else:
+                pyname = symbol_to_identifier(symbol)
+                if pyname in self.__dict__:
+                    raise DeclarationError("symbol '%s' has already been declared in ns '%s'",
+                                           symbol, self.name)
+                self.__dict__[pyname] = value
+        except (TypeError, AttributeError) as e:
+            raise TypeError("a namespace may only contain symbols (or string keys)") from e
 
-    def get(self, item, default=None):
+    def __repr__(self):
+        return "(ns %s)" % self.name
+
+    def get(self, item: Union[Symbol, str], default=None):
         try:
             return self[item]
         except KeyError as e:
@@ -160,48 +199,51 @@ class Namespace(metaclass=NamespaceMeta):
     def initialize(self, imports_specs=None, require_specs=None, reload=False):
         if self._initialized:
             return False
-        if not self._initialized:
-            if imports_specs:
-                self.pyimport(imports_specs)
-            if require_specs:
-                self.require(require_specs)
+        if imports_specs:
+            self.pyimport(imports_specs)
+        if require_specs:
+            self.require(require_specs)
         self._initialized = True
         Namespace._current_ns = self
         return True
 
     def pyimport(self, import_specs):
-        ns_mod = self._module
         for mod_spec in import_specs:
             mod = importlib.import_module(mod_spec.module_name)
             if isinstance(mod_spec, DirectImportSpec):
-                setattr(ns_mod, mod_spec.alias, mod)
                 self[mod_spec.alias] = mod
             elif isinstance(mod_spec, IndirectImportSpec):
                 for member_spec in mod_spec.members:
                     member = getattr(mod, member_spec.name)
-                    setattr(ns_mod, member_spec.alias, member)
                     self[member_spec.alias] = member
 
     def require(self, require_specs):
         raise NotImplementedError("require: todo")
 
     # noinspection PyUnboundLocalVariable
-    @classmethod
-    def new_module(cls, name: str):
-        for ns in cls.split_ns_name(name):
-            if ns not in sys.modules:
-                sys.modules[ns] = imp.new_module(ns)
-                spec = ModuleSpec(ns, None)
-                sys.modules[ns].__spec__ = spec
-            mod = sys.modules[ns]
-            if "." not in ns:
-                mod.__package__ = ''
-            else:
-                package, *_, self_name = ns.split(".")
-                mod.__package__ = package
-                setattr(sys.modules[parent_ns], self_name, mod)
-            parent_ns = ns
-        return mod
+    def load_parent_if_absent(self):
+        if "." in self.name:
+            parent, ns = self.name.rsplit(".", 1)
+            try:
+                parent_ns = Namespace.find(name=parent)
+            except KeyError:
+                parent_ns = Namespace(name=parent)
+            parent_ns[ns] = self
+
+        # for ns in cls.split_ns_name(name):
+        #     if ns not in sys.modules:
+        #         sys.modules[ns] = imp.new_module(ns)
+        #         spec = ModuleSpec(ns, None)
+        #         sys.modules[ns].__spec__ = spec
+        #     mod = sys.modules[ns]
+        #     if "." not in ns:
+        #         mod.__package__ = ''
+        #     else:
+        #         package, *_, self_name = ns.split(".")
+        #         mod.__package__ = package
+        #         setattr(sys.modules[parent_ns], self_name, mod)
+        #     parent_ns = ns
+        # return mod
 
     @staticmethod
     def split_ns_name(name: str) -> Generator[str, None, None]:
@@ -227,9 +269,8 @@ class Namespace(metaclass=NamespaceMeta):
     def lookup_symbol_in_current_ns(cls, symbol: 'Symbol'):
         return cls._current_ns[symbol]
 
-    @staticmethod
-    def pyname(name: str):
-        pass
+    def __eq__(self, other):
+        return self is other
 
 
 class SpecialForm:

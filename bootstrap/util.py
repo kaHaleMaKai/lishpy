@@ -133,7 +133,13 @@ def symbol_to_identifier(name: str):
         raise ValueError("empty string is not a valid symbol name")
     if len(name) == 1:
         return _single_char_to_identifier(name)
-    return "".join(_long_symbol_to_identifier(name))
+    if name.endswith("!"):
+        new_name = name[:-1] + "_bang"
+    elif name.endswith("?"):
+        new_name = "is_" + name[:-1]
+    else:
+        new_name = name
+    return "".join(_long_symbol_to_identifier(new_name))
 
 
 def _long_ns_to_identifier(name: str):

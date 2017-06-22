@@ -1,7 +1,6 @@
 from bootstrap.util import SingletonMeta, PooledMeta
 from fractions import Fraction
 from bootstrap.errors import ConstantError
-from bootstrap.util import symbol_to_identifier, ns_to_identifier
 
 
 class Atom:
@@ -13,7 +12,7 @@ class Nil(Atom, metaclass=SingletonMeta):
 
     _str_repr = "nil"
 
-    def __str__(self):
+    def __repr__(self):
         return self._str_repr
 
     def __bool__(self):
@@ -177,20 +176,22 @@ class Function(Atom):
 
 
 class Symbol:
-    __slots__ = ['_name', '_pyname', '_ns', '_namespace']
+    __slots__ = ['_name', '_pyname', '_ns', '_pyns']
 
     def __init__(self, name: str, ns: str = nil):
         self._name = String(name, intern=True)
-        self._pyname = symbol_to_identifier(name)
-        self._ns = nil if ns is nil else String(ns, intern=True)
+        if ns is nil:
+            self._ns = nil
+        else:
+            try:
+                # noinspection PyUnresolvedReferences
+                self._ns = ns.name
+            except AttributeError:
+                self._ns = String(ns, intern=True)
 
     @property
     def name(self):
         return self._name
-
-    @property
-    def pyname(self):
-        return self._pyname
 
     @property
     def ns(self):
@@ -209,3 +210,8 @@ class Symbol:
                     self._ns == other._ns)
         except AttributeError:
             return False
+
+    def __repr__(self):
+        if self.ns:
+            return "%s/%s" % (self.ns, self.name)
+        return self.name

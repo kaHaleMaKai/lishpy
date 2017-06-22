@@ -16,9 +16,10 @@ class BuiltinsTest(unittest.TestCase):
         self.assertEqual(ns_x._initialized, False)
         self.assertEqual(ns_xy.name, xy)
         self.assertEqual(ns_xy._initialized, False)
-        self.assertEqual(ns_x._module, x_module)
-        self.assertEqual(ns_xy._module, xy_module)
+        self.assertEqual(ns_x, x_module)
+        self.assertEqual(ns_xy, xy_module)
 
+    # noinspection PyUnresolvedReferences
     def test_ns_initialize(self):
         ns = core.Namespace("x")
         other_ns = core.Namespace("x.y")
@@ -31,9 +32,15 @@ class BuiltinsTest(unittest.TestCase):
         ns.initialize(imports_specs=(os_, osp_, ospath_, threading_))
         import threading
         import os.path
+        os.path.is_path = lambda x: True
+        os.path.make_path_bang = lambda x: True
+        os.path.ASTERthe_numberASTER = 42
         self.assertEqual(ns["os"], os)
         self.assertEqual(ns["osp"], os.path)
-        self.assertEqual(ns["os.path"], os.path)
+        self.assertEqual(ns["os.path/abspath"], os.path.abspath)
+        self.assertEqual(ns["os.path/path?"], os.path.is_path)
+        self.assertEqual(ns["os.path/make-path!"], os.path.make_path_bang)
+        self.assertEqual(ns["os.path/*the-number*"], os.path.ASTERthe_numberASTER)
         self.assertEqual(ns["T"], threading.Thread)
         self.assertEqual(ns["Barrier"], threading.Barrier)
         self.assertEqual(core.Namespace.current_ns, ns)
@@ -42,7 +49,7 @@ class BuiltinsTest(unittest.TestCase):
 
     def test_set(self):
         ns = core.Namespace("x")
-        ns[1] = "bye"
-        self.assertEqual(ns[1], "bye")
+        ns["%"] = "bye"
+        self.assertEqual(ns["%"], "bye")
         with self.assertRaises(DeclarationError):
-            ns[1] = "ciao"
+            ns["%"] = "ciao"
