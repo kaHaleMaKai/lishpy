@@ -320,7 +320,7 @@ class Var(Evaluable):
 class Keyword(Evaluable):
     __slots__ = ["_value", "_ns"]
 
-    def __init__(self, name, ns=None):
+    def __init__(self, name, ns=nil):
         self._value = name
         self._ns = ns
 

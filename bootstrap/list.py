@@ -80,6 +80,7 @@ class EmptyListWithMetaInfo(EmptyList):
         super().__init__()
         self._meta = meta
 
+    @property
     def meta(self):
         return self._meta
 

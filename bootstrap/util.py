@@ -60,7 +60,7 @@ _SINGLE_CHAR_LETTERS = _ascii_letters + "_"
 _ALNUM = _ascii_letters + "0123456789_"
 _SYMBOL_CHARS_PUNCTUATION = "+-*%!?<>$|"
 _SYMBOL_CHARS = _ALNUM + _SYMBOL_CHARS_PUNCTUATION
-_ONE_CHAR_PUNCTUATION = _SYMBOL_CHARS_PUNCTUATION + "/:.'`~@"
+_ONE_CHAR_PUNCTUATION = _SYMBOL_CHARS_PUNCTUATION + "/:.'`~"
 _ONE_CHAR_SYMBOL = _SYMBOL_CHARS + _ONE_CHAR_PUNCTUATION
 _NS_PUNCTUATION = "-"
 _NS_CHARS = _ALNUM + _NS_PUNCTUATION + "."
@@ -87,7 +87,6 @@ _one_char_symbol_map = dict(
        "/": "SLASH",
        ":": "COLON",
        ".": "DOT",
-       "@": "ATTOK",
        "&": "AMPERS",
        "'": "QUOTE"
        }

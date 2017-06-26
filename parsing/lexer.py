@@ -1,43 +1,48 @@
-import re
-from bootstrap import core
+from bootstrap.core import Keyword, Namespace
+from bootstrap.list import List
+from bootstrap.map import Map
 from bootstrap.primitives import *
+from bootstrap.vector import Vector
+
+
+SPACE = " "
+TAB = "\t"
+NL = "\n"
+CR = "\r"
+ROUTE = "#"
+COMMA = ","
+COLON = ":"
+SEMICOLON = ";"
+P_OPEN = "("
+P_CLOSE = ")"
+B_OPEN = "["
+B_CLOSE = "]"
+C_OPEN = "{"
+C_CLOSE = "}"
+APOS = "'"
+QUOTE = '"'
+ESCAPE = "\\"
+BACKTICK = "`"
+EOF = None
+
+SPACE_CHARS = "".join((NL, TAB, CR, SPACE, COMMA))
+TERMINATORS = "".join((P_CLOSE, C_CLOSE, B_CLOSE, *SPACE_CHARS))
+
+(COMMENT,
+ STR,
+ LIST_START,
+ LIST_END,
+ MAP_START,
+ MAP_END,
+ VEC_START,
+ VEC_END,
+ BLOCK_COMMENT,
+ SYMBOL) = range(10)
+
+lishpy_core = Namespace("lishpy.core")
 
 
 class Lexer:
-
-    SPACE = " "
-    TAB = "\t"
-    NL = "\n"
-    CR = "\r"
-    ROUTE = "#"
-    COMMA = ","
-    COLON = ":"
-    SEMICOLON = ";"
-    P_OPEN = "("
-    P_CLOSE = ")"
-    B_OPEN = "["
-    B_CLOSE = "]"
-    C_OPEN = "{"
-    C_CLOSE = "}"
-    APOS = "'"
-    QUOTE = '"'
-    ESCAPE = "\\"
-    BACKTICK = "`"
-    EOF = None
-
-    SPACE_CHARS = "".join((self.NL, self.TAB, self.CR, self.SPACE, self.COMMA))
-    TERMINATORS = "".join((self.P_CLOSE, self.C_CLOSE, self.B_CLOSE, *SPACE_CHARS))
-
-    (COMMENT,
-     STR,
-     LIST_START,
-     LIST_END,
-     MAP_START,
-     MAP_END,
-     VEC_START,
-     VEC_END,
-     BLOCK_COMMENT,
-     SYMBOL) = range(10)
 
     def __init__(self, char_stream):
         self.ring_buffer = None
@@ -45,7 +50,6 @@ class Lexer:
         self.pos = 0
         self.col = 0
         self.line_no = 1
-        self._unread = False
         self.level = 0
         self.escaped = False
         self.quoted = False
@@ -66,42 +70,32 @@ class Lexer:
         try:
             return self.ring_buffer[self.pos]
         except IndexError:
-            return self.EOF
+            return EOF
 
     def peek_again(self):
         try:
             return self.ring_buffer[self.pos + 1]
         except IndexError:
-            return self.EOF
-
-    def unread(self):
-        self._unread = True
-        if self.pos == 0:
-            self.pos = 1023
-            self.swap_buffers()
-        else:
-            self.pos -= 1
-        return ch
+            return EOF
 
     def next_char(self):
         ch = self.peek()
         self._forward()
+        if ch != NL:
+            self.col += 1
+        else:
+            self.line_no += 1
+            self.col = 0
         return ch
 
     def _forward(self):
         if self.pos == 1023:
             self.pos = 0
             self.swap_buffers()
-        if self.pos == 512 and not self._unread:
+        if self.pos == 512:
             self.load_into_buffer()
         else:
             self.pos += 1
-        if ch != self.NL:
-            self.col += 1
-        else:
-            self.line_no += 1
-            self.col = 0
-        self._unread = False
 
     def read_until_terminator(self):
         while True:
@@ -115,14 +109,14 @@ class Lexer:
         buffer = []
         while True:
             ch = self.next_char()
-            if ch == self.ESCAPE:
+            if ch == ESCAPE:
                 if self.escaped:
                     buffer.append(ch)
                     self.escaped = False
                 else:
                     self.escaped = True
-            elif ch == self.QUOTE and not self.escaped:
-                if self.peek() != self.QUOTE:
+            elif ch == QUOTE and not self.escaped:
+                if self.peek() != QUOTE:
                     return "".join(buffer)
                 self.next_char()
                 return self.read_triple_string()
@@ -135,14 +129,14 @@ class Lexer:
         while True:
             ch = self.next_char()
             if self.escaped:
-                if ch in (self.ESCAPE, self.QUOTE):
+                if ch in (ESCAPE, QUOTE):
                     buffer.append(ch)
                 else:
                     buffer.append(self.escape_char(ch))
                 self.escaped = False
-            elif ch == self.ESCAPE:
+            elif ch == ESCAPE:
                 self.escaped = True
-            elif ch == self.QUOTE:
+            elif ch == QUOTE:
                 if num_quotes == 2:
                     del buffer[-2:]
                     return "".join(buffer)
@@ -154,51 +148,107 @@ class Lexer:
 
     def read_line_comment(self):
         while True:
-            if self.next_char() in (self.NL, self.EOF):
+            if self.next_char() in (NL, EOF):
                 break
 
-    def read_list(self):
+    def read_vector(self):
+        li = []
         while True:
-            if self.next_char() == 
+            ch = self.peek()
+            if ch == B_CLOSE:
+                # only for side-effect
+                self.next_char()
+                if li:
+                    return Vector().conj(*li)
+                return Vector()
+            else:
+                li.append(self.lex())
+
+    def read_list(self):
+        li = []
+        while True:
+            ch = self.peek()
+            if ch == P_CLOSE:
+                # only for side-effect
+                self.next_char()
+                if li:
+                    return List().conj(li)
+                return List()
+            else:
+                li.append(self.lex())
+
+    def read_map(self):
+        li = []
+        while True:
+            ch = self.peek()
+            if ch == C_CLOSE:
+                # only for side-effect
+                self.next_char()
+                if li:
+                    return Map().assoc(*li)
+                return Map()
+            else:
+                li.append(self.lex())
+
+    def read_syntax_quote(self):
+
 
     def lex(self):
         while True:
             ch = self.next_char()
-            if ch == self.EOF:
+            if ch == EOF:
                 break
             elif self.is_space_char(ch):
                 continue
-            elif ch == self.SEMICOLON:
+            elif ch == SEMICOLON:
                 self.read_line_comment()
-            elif ch == self.QUOTE:
+            elif ch == QUOTE:
                 yield self.read_string()
-            elif ch == self.P_OPEN:
+            elif ch == P_OPEN:
                 yield self.read_list()
-            elif ch == self.C_OPEN:
+            elif ch == C_OPEN:
                 yield self.read_map()
-            elif ch == self.B_OPEN:
+            elif ch == B_OPEN:
                 yield self.read_vector()
-            elif ch == self.APOS:
+            elif ch == APOS:
                 self.read_quoted()
-            elif ch == self.
+            # TODO: what is missing????
+            # elif ch == self.
             elif self.is_number(ch):
                 self.read_number(ch)
-            elif ch == self.COLON:
+            elif ch == COLON:
                 self.read_keyword()
-            elif ch == self.BACKTICK:
+            elif ch == BACKTICK:
                 self.read_syntax_quote()
             else:
                 self.read_symbol()
-            self.assert_next_char_is_terminator():
+            self.assert_next_char_is_terminator()
 
     def is_terminator(self, ch):
         # relying on (EOF is None) and '' as invalid input
         # both terminate the read expression
-        return ch in self.TERMINATORS or not ch
+        return ch in TERMINATORS or not ch
 
     def assert_next_char_is_terminator(self):
-        if not self.is_terminator(self.peek_again())
+        if not self.is_terminator(self.peek_again()):
             raise ValueError("bad terminator for string: '%s'" % self.peek())
+
+    @staticmethod
+    def ensure_list(expr):
+        if isinstance(expr, List):
+            return expr
+        return List().conj(expr)
+
+    def read_quoted(self):
+        return self.ensure_list(self.lex()).conj(Symbols.QUOTE)
+
+    def read_keyword(self):
+        keyword = "".join([ch for ch in self.read_until_terminator()])
+        if "/" in keyword:
+            ns, name = keyword.split("/")
+        else:
+            ns, name = nil, keyword
+        return Keyword(name, ns)
 
     def is_number(self, ch: str):
         if "0" <= ch <= "9":
@@ -224,7 +274,7 @@ class Lexer:
     def to_number(string):
         if "/" in string:
             return Ratio(string)
-        if "." in string or e in string:
+        if "." in string or "e" in string:
             return Float(string)
         if "x" in string:
             return Int(string, 16)
@@ -244,20 +294,16 @@ class Lexer:
         if "/" in string:
             ns, name = string.split("/")
         else:
-            ns = nil
-            name = string
+            ns, name = nil, string
+        return Symbol(name, ns)
 
-    def is_namespace(self, string: str):
+    @staticmethod
+    def is_space_char(ch):
+        return ch in SPACE_CHARS
 
-
-    def is_symbol(self, identifier: str):
-        pass
-
-    def is_space_char(self, ch):
-        return ch in self.SPACE_CHARS
-
-    def is_quote_char(self, ch):
-        return ch in (self.APOS, self.QUOTE)
+    @staticmethod
+    def is_quote_char(ch):
+        return ch in (APOS, QUOTE)
 
     @staticmethod
     def escape_char(ch):

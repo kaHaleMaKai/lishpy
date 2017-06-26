@@ -8,11 +8,12 @@ class CharConverterTest(unittest.TestCase):
         self.assertEqual("x", util.symbol_to_identifier("x"))
         self.assertEqual("ASTER", util.symbol_to_identifier("*"))
         self.assertEqual("BACKT", util.symbol_to_identifier("`"))
-        self.assertEqual("ATTOK", util.symbol_to_identifier("@"))
         self.assertEqual("COLON", util.symbol_to_identifier(":"))
 
         with self.assertRaises(ValueError):
             util.symbol_to_identifier("0")
+        with self.assertRaises(ValueError):
+            util.symbol_to_identifier("@")
         with self.assertRaises(ValueError):
             util.symbol_to_identifier("{")
         with self.assertRaises(ValueError):

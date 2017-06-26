@@ -178,8 +178,8 @@ class Function(Atom):
 class Symbol:
     __slots__ = ['_name', '_pyname', '_ns', '_pyns']
 
-    def __init__(self, name: str, ns: str = nil):
-        self._name = String(name, intern=True)
+    def __init__(self, name: str, ns: str = nil, intern: bool = True):
+        self._name = String(name, intern=intern)
         if ns is nil:
             self._ns = nil
         else:
@@ -187,7 +187,7 @@ class Symbol:
                 # noinspection PyUnresolvedReferences
                 self._ns = ns.name
             except AttributeError:
-                self._ns = String(ns, intern=True)
+                self._ns = String(ns, intern=intern)
 
     @property
     def name(self):
